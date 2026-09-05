@@ -1,8 +1,10 @@
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <thread>
 #include <atomic>
 #include <array>
+#include <string>
 #include "Loader.h"
 #include "CreationKit32.h"
 #include "LipSynchAnim.h"
@@ -161,24 +163,150 @@ int StartCreationKitIPC(uint32_t ProcessID)
 	return 0;
 }
 
+bool InitializeFromType(const char *Type)
+{
+	if (!_stricmp(Type, "Skyrim") || !_stricmp(Type, "Fallout3") || !_stricmp(Type, "FalloutNV"))
+		return Loader::Initialize(Loader::GameVersion::SkyrimOrEarlier);
+
+	if (!_stricmp(Type, "Fallout4"))
+		return Loader::Initialize(Loader::GameVersion::Fallout4);
+
+	printf("Unknown generator type \"%s\"\n", Type);
+	return false;
+}
+
+void PrintUsage()
+{
+	printf("\n\nUsage:\n");
+	printf("\tFaceFXWrapper [Type] [Lang] [FonixDataPath] [WavPath] [ResampledWavPath] [LipPath] [Text]\n");
+	printf("\tFaceFXWrapper [Type] [Lang] [FonixDataPath] [ResampledWavPath] [LipPath] [Text]\n");
+	printf("\tFaceFXWrapper serve [Type]\n");
+	printf("\n");
+	printf("Examples:\n");
+	printf("\tFaceFXWrapper \"Skyrim\" \"USEnglish\" \"C:\\FonixData.cdf\" \"C:\\input.wav\" \"C:\\input_resampled.wav\" \"C:\\output.lip\" \"Blah Blah Blah\"\n");
+	printf("\tFaceFXWrapper \"Fallout4\" \"USEnglish\" \"C:\\FonixData.cdf\" \"C:\\input_resampled.wav\" \"C:\\output.lip\" \"Blah Blah Blah\"\n");
+	printf("\tFaceFXWrapper serve Fallout4\n");
+	printf("\n");
+	printf("serve reads jobs from stdin (CK loaded once). Each job:\n");
+	printf("\tLIP\\n<Lang>\\n<FonixDataPath>\\n<WavPath>\\n<LipPath>\\n<byteLength>\\n<text bytes>\\n\n");
+	printf("Replies on stdout: \"FXW READY <Type>\", \"FXW OK\", \"FXW ERR ...\". QUIT ends.\n");
+	printf("WavPath must already be 16 kHz mono 16-bit; resampling is skipped.\n");
+	printf("\n");
+}
+
+bool ReadStdinLine(std::string &Line)
+{
+	Line.clear();
+	int ch;
+	while ((ch = fgetc(stdin)) != EOF)
+	{
+		if (ch == '\n')
+		{
+			if (!Line.empty() && Line.back() == '\r')
+				Line.pop_back();
+			return true;
+		}
+		Line.push_back(static_cast<char>(ch));
+	}
+	return !Line.empty();
+}
+
+bool ReadStdinExact(std::string &Data, size_t Size)
+{
+	Data.assign(Size, '\0');
+	if (Size == 0)
+		return true;
+	return fread(Data.data(), 1, Size, stdin) == Size;
+}
+
+void ReplyFxw(const char *Line)
+{
+	printf("%s\n", Line);
+	fflush(stdout);
+}
+
+int StartServeMode(const char *Type)
+{
+	setvbuf(stdin, NULL, _IONBF, 0);
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
+
+	if (!InitializeFromType(Type))
+		return 1;
+
+	char ready[128];
+	sprintf_s(ready, "FXW READY %s", Type);
+	ReplyFxw(ready);
+
+	std::string command;
+	while (ReadStdinLine(command))
+	{
+		if (command.empty())
+			continue;
+
+		if (!_stricmp(command.c_str(), "QUIT"))
+		{
+			ReplyFxw("FXW BYE");
+			return 0;
+		}
+
+		if (_stricmp(command.c_str(), "LIP") != 0)
+		{
+			ReplyFxw("FXW ERR unknown command");
+			continue;
+		}
+
+		std::string language, fonixPath, wavPath, lipPath, lengthText;
+		if (!ReadStdinLine(language) || !ReadStdinLine(fonixPath) || !ReadStdinLine(wavPath) ||
+			!ReadStdinLine(lipPath) || !ReadStdinLine(lengthText))
+		{
+			ReplyFxw("FXW ERR truncated LIP job");
+			return 1;
+		}
+
+		char *end = nullptr;
+		const unsigned long textBytes = strtoul(lengthText.c_str(), &end, 10);
+		if (end == lengthText.c_str() || textBytes > 1024 * 1024)
+		{
+			ReplyFxw("FXW ERR invalid text length");
+			return 1;
+		}
+
+		std::string text;
+		if (!ReadStdinExact(text, textBytes))
+		{
+			ReplyFxw("FXW ERR truncated LIP text");
+			return 1;
+		}
+
+		int trailing = fgetc(stdin);
+		if (trailing == '\r')
+			trailing = fgetc(stdin);
+		if (trailing != '\n' && trailing != EOF)
+		{
+			ReplyFxw("FXW ERR expected newline after LIP text");
+			return 1;
+		}
+
+		if (!RunLipGeneration(language.c_str(), fonixPath.c_str(), wavPath.c_str(), wavPath.c_str(),
+				lipPath.c_str(), text.c_str(), false))
+		{
+			ReplyFxw("FXW ERR LIP generation failed");
+			continue;
+		}
+
+		ReplyFxw("FXW OK");
+	}
+
+	return 0;
+}
+
 int StartCommandLine()
 {
-	auto initVersionFromArgv = []()
-	{
-		if (!_stricmp(__argv[1], "Skyrim"))
-			return Loader::Initialize(Loader::GameVersion::SkyrimOrEarlier);
-
-		if (!_stricmp(__argv[1], "Fallout4"))
-			return Loader::Initialize(Loader::GameVersion::Fallout4);
-
-		printf("Unknown generator type \"%s\"\n", __argv[1]);
-		return false;
-	};
-
 	switch (__argc)
 	{
 	case 7:
-		if (!initVersionFromArgv())
+		if (!InitializeFromType(__argv[1]))
 			return 1;
 
 		// Resampling disabled - use same path for WavPath and ResampledWavPath
@@ -191,7 +319,7 @@ int StartCommandLine()
 		return 0;
 
 	case 8:
-		if (!initVersionFromArgv())
+		if (!InitializeFromType(__argv[1]))
 			return 1;
 
 		if (!RunLipGeneration(__argv[2], __argv[3], __argv[4], __argv[5], __argv[6], __argv[7], true))
@@ -203,19 +331,9 @@ int StartCommandLine()
 		return 0;
 
 	default:
-		printf("\n\nUsage:\n");
-		printf("\tFaceFXWrapper [Type] [Lang] [FonixDataPath] [WavPath] [ResampledWavPath] [LipPath] [Text]\n");
-		printf("\tFaceFXWrapper [Type] [Lang] [FonixDataPath] [ResampledWavPath] [LipPath] [Text]\n");
-		printf("\n");
-		printf("Examples:\n");
-		printf("\tFaceFXWrapper \"Skyrim\" \"USEnglish\" \"C:\\FonixData.cdf\" \"C:\\input.wav\" \"C:\\input_resampled.wav\" \"C:\\output.lip\" \"Blah Blah Blah\"\n");
-		printf("\tFaceFXWrapper \"Fallout4\" \"USEnglish\" \"C:\\FonixData.cdf\" \"C:\\input_resampled.wav\" \"C:\\output.lip\" \"Blah Blah Blah\"\n");
-		printf("\n");
-
+		PrintUsage();
 		return 1;
 	}
-
-	return 0;
 }
 
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
@@ -225,6 +343,12 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	{
 		int result = StartCreationKitIPC(atoi(pid));
 		return result;
+	}
+
+	if (__argc >= 2 && !_stricmp(__argv[1], "serve"))
+	{
+		const char *type = __argc >= 3 ? __argv[2] : "Fallout4";
+		return StartServeMode(type);
 	}
 
 	// Use command line processing instead

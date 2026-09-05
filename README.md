@@ -24,6 +24,27 @@ FaceFXWrapper Skyrim USEnglish FonixData.cdf c00jorrvaskrfight__000bd639_1.wav r
 ResampledWavPath and LipPath are paths for output files. They may be relative or absolute. All other parameters are inputs.
 ```
 
+Persistent worker (load CK once, then generate many LIPs):
+
+```
+FaceFXWrapper serve Fallout4
+FaceFXWrapper serve Skyrim
+```
+
+Writes `FXW READY <Type>` when the embedded CK is mapped. Each job on stdin:
+
+```
+LIP
+USEnglish
+C:\FonixData.cdf
+C:\input_16khz.wav
+C:\output.lip
+<byte length of text>
+<text bytes>
+```
+
+Replies `FXW OK` or `FXW ERR ...`. `QUIT` shuts the worker down. The wav must already be 16 kHz mono 16-bit; the serve loop does not resample.
+
 LIP generation with manually supplied resampled wav file data (skipping resample stage):
 
 ```
