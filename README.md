@@ -7,7 +7,7 @@ A utility to generate native LIP files for TES/Fallout games without using or in
 | Argument | Possible value |
 | -------- | -------------- |
 Type | Skyrim, Fallout4
-Lang | USEnglish, or Ukrainian (opt-in: strip `[tags]`, respell Cyrillic, then USEnglish Fonix)
+Lang | USEnglish, Ukrainian, or Polish (opt-in: strip `[tags]`, respell, then USEnglish Fonix)
 FonixDataPath | FonixData.cdf
 WavPath | Source audio file
 ResampledWavPath | Resampled source audio file
@@ -43,9 +43,9 @@ C:\output.lip
 <text bytes>
 ```
 
-`Lang` may be `Ukrainian`: the wrapper strips `[tone tags]`, respells Cyrillic for stock Fonix, then runs as `USEnglish`. Other languages pass the text through unchanged. Serve text is UTF-8; CLI dialogue is read as UTF-16 when `Lang` is `Ukrainian`.
+`Lang` may be a respell language (`Ukrainian`, `Polish`, …): the wrapper strips `[tone tags]`, respells the text for stock Fonix, then runs as `USEnglish`. Ukrainian maps Cyrillic; Polish maps Latin orthography (`ł`→`w`, `cz`→`ch`, `ą`/`ę` nasals, …). Other languages pass the text through unchanged. Serve text is UTF-8; CLI dialogue is read as UTF-16 for those respell languages.
 
-`FaceFXWrapper test-uk` checks the respell table (no CK / Fonix).
+`FaceFXWrapper test-uk`, `test-pl`, or `test-all` check the respell tables (no CK / Fonix). A new respell language is a new `.cpp` plus one line in `RespellLanguages.cpp`.
 
 Replies `FXW OK` or `FXW ERR ...`. `QUIT` shuts the worker down. The wav must already be 16 kHz mono 16-bit; the serve loop does not resample.
 

@@ -1,50 +1,13 @@
-#include "Ukrainian.h"
-
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <string>
+#include "Respell.h"
+#include "RespellLang.h"
+#include "RespellUtil.h"
 
 namespace
 {
-	struct Codepoint
-	{
-		uint32_t cp = 0;
-		size_t bytes = 1;
-	};
-
-	Codepoint DecodeUtf8(const std::string &Text, size_t Index)
-	{
-		const unsigned char lead = static_cast<unsigned char>(Text[Index]);
-		if (lead < 0x80)
-			return { lead, 1 };
-
-		if ((lead & 0xE0) == 0xC0 && Index + 1 < Text.size())
-		{
-			return { static_cast<uint32_t>(((lead & 0x1F) << 6) |
-					(static_cast<unsigned char>(Text[Index + 1]) & 0x3F)),
-				2 };
-		}
-
-		if ((lead & 0xF0) == 0xE0 && Index + 2 < Text.size())
-		{
-			return { static_cast<uint32_t>(((lead & 0x0F) << 12) |
-					((static_cast<unsigned char>(Text[Index + 1]) & 0x3F) << 6) |
-					(static_cast<unsigned char>(Text[Index + 2]) & 0x3F)),
-				3 };
-		}
-
-		if ((lead & 0xF8) == 0xF0 && Index + 3 < Text.size())
-		{
-			return { static_cast<uint32_t>(((lead & 0x07) << 18) |
-					((static_cast<unsigned char>(Text[Index + 1]) & 0x3F) << 12) |
-					((static_cast<unsigned char>(Text[Index + 2]) & 0x3F) << 6) |
-					(static_cast<unsigned char>(Text[Index + 3]) & 0x3F)),
-				4 };
-		}
-
-		return { lead, 1 };
-	}
+	using respell::CollapseWs;
+	using respell::DecodeUtf8;
+	using respell::ExpectEq;
+	using respell::TitleCase;
 
 	bool IsCyrillic(uint32_t Cp)
 	{
@@ -166,72 +129,6 @@ namespace
 		}
 	}
 
-	std::string CollapseWs(const std::string &Text)
-	{
-		std::string out;
-		out.reserve(Text.size());
-		bool space = false;
-		for (unsigned char ch : Text)
-		{
-			if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n')
-			{
-				space = true;
-				continue;
-			}
-			if (space && !out.empty())
-				out.push_back(' ');
-			space = false;
-			out.push_back(static_cast<char>(ch));
-		}
-		return out;
-	}
-
-	std::string SanitizeDialogueText(const char *Text)
-	{
-		const std::string src = Text ? Text : "";
-		std::string out;
-		out.reserve(src.size());
-
-		for (size_t i = 0; i < src.size();)
-		{
-			if (src[i] == '[')
-			{
-				const size_t close = src.find(']', i + 1);
-				if (close != std::string::npos)
-				{
-					out.push_back(' ');
-					i = close + 1;
-					continue;
-				}
-				out.push_back(' ');
-				i += 1;
-				continue;
-			}
-
-			if (src[i] == ']')
-			{
-				out.push_back(' ');
-				i += 1;
-				continue;
-			}
-
-			out.push_back(src[i]);
-			i += 1;
-		}
-
-		return CollapseWs(out);
-	}
-
-	std::string TitleCase(const char *Mapped, bool Upper)
-	{
-		if (!Mapped || !Mapped[0])
-			return {};
-		std::string out = Mapped;
-		if (Upper && out[0] >= 'a' && out[0] <= 'z')
-			out[0] = static_cast<char>(out[0] - 'a' + 'A');
-		return out;
-	}
-
 	bool HasCyrillic(const std::string &Text)
 	{
 		for (size_t i = 0; i < Text.size();)
@@ -307,75 +204,50 @@ namespace
 		return CollapseWs(out);
 	}
 
-	bool ExpectEq(const char *Name, const std::string &Got, const char *Want)
+	int SelfTest()
 	{
-		if (Got == Want)
-		{
-			printf("  ok  %s\n", Name);
-			return true;
-		}
-		printf("  FAIL %s\n       got  \"%s\"\n       want \"%s\"\n", Name, Got.c_str(), Want);
-		return false;
+		int failed = 0;
+
+		failed += !ExpectEq("ascii", AdaptUkrainianForFonix("Hello, vault dweller."), "Hello, vault dweller.");
+		failed += !ExpectEq("pryvit", AdaptUkrainianForFonix(u8"привіт"), "prihveet");
+		failed += !ExpectEq("ni", AdaptUkrainianForFonix(u8"ні"), "nee");
+		failed += !ExpectEq("tse", AdaptUkrainianForFonix(u8"це"), "tseh");
+		failed += !ExpectEq("shcho", AdaptUkrainianForFonix(u8"що"), "shchoh");
+		failed += !ExpectEq("yizha", AdaptUkrainianForFonix(u8"їжа"), "yeezhah");
+		failed += !ExpectEq("gava", AdaptUkrainianForFonix(u8"ґава"), "gahvah");
+		failed += !ExpectEq("dyakuyu", AdaptUkrainianForFonix(u8"дякую"), "dyahkooyoo");
+		failed += !ExpectEq("mixed", AdaptUkrainianForFonix(u8"Pip-Boy працює"), "Pip-Boy prahtsyooyeh");
+		failed += !ExpectEq("apostrophe", AdaptUkrainianForFonix(u8"з'їсти"), "zyeestih");
+		failed += !ExpectEq("dzh", AdaptUkrainianForFonix(u8"джерело"), "jehrehloh");
+		failed += !ExpectEq("dz", AdaptUkrainianForFonix(u8"дзвін"), "dzveen");
+		failed += !ExpectEq("sogodni", AdaptUkrainianForFonix(u8"сьогодні"), "syohohdnee");
+		failed += !ExpectEq("nyoho", AdaptUkrainianForFonix(u8"нього"), "nyohoh");
+		failed += !ExpectEq("yoho", AdaptUkrainianForFonix(u8"його"), "yohoh");
+		failed += !ExpectEq("khlib", AdaptUkrainianForFonix(u8"хліб"), "hleeb");
+		failed += !ExpectEq("sil", AdaptUkrainianForFonix(u8"сіль"), "seel");
+		failed += !ExpectEq(
+			"prepare uk",
+			PrepareDialogueText("Ukrainian", u8"[Сарказм] Привіт, мешканцю."),
+			"Prihveet, mehshkahntsyoo.");
+		failed += !ExpectEq(
+			"usenglish passthrough",
+			PrepareDialogueText("USEnglish", u8"привіт"),
+			u8"привіт");
+		failed += !ExpectEq("lang alias", ResolveFaceFxLanguage("Ukrainian"), "USEnglish");
+		failed += !ExpectEq("lang passthrough", ResolveFaceFxLanguage("USEnglish"), "USEnglish");
+		return failed;
 	}
 }
 
-bool IsUkrainianLanguage(const char *Language)
+void RegisterUkrainianRespell()
 {
-	return Language && _stricmp(Language, "Ukrainian") == 0;
-}
-
-std::string PrepareDialogueText(const char *Language, const char *Text)
-{
-	if (!IsUkrainianLanguage(Language))
-		return Text ? Text : "";
-	return AdaptUkrainianForFonix(SanitizeDialogueText(Text));
-}
-
-const char *ResolveFaceFxLanguage(const char *Language)
-{
-	if (IsUkrainianLanguage(Language))
-		return "USEnglish";
-	return Language;
-}
-
-int RunUkrainianSelfTest()
-{
-	int failed = 0;
-
-	printf("FaceFXWrapper Ukrainian self-test (Fonix respell)\n");
-
-	failed += !ExpectEq("ascii", AdaptUkrainianForFonix("Hello, vault dweller."), "Hello, vault dweller.");
-	failed += !ExpectEq("pryvit", AdaptUkrainianForFonix(u8"привіт"), "prihveet");
-	failed += !ExpectEq("ni", AdaptUkrainianForFonix(u8"ні"), "nee");
-	failed += !ExpectEq("tse", AdaptUkrainianForFonix(u8"це"), "tseh");
-	failed += !ExpectEq("shcho", AdaptUkrainianForFonix(u8"що"), "shchoh");
-	failed += !ExpectEq("yizha", AdaptUkrainianForFonix(u8"їжа"), "yeezhah");
-	failed += !ExpectEq("gava", AdaptUkrainianForFonix(u8"ґава"), "gahvah");
-	failed += !ExpectEq("dyakuyu", AdaptUkrainianForFonix(u8"дякую"), "dyahkooyoo");
-	failed += !ExpectEq("mixed", AdaptUkrainianForFonix(u8"Pip-Boy працює"), "Pip-Boy prahtsyooyeh");
-	failed += !ExpectEq("apostrophe", AdaptUkrainianForFonix(u8"з'їсти"), "zyeestih");
-	failed += !ExpectEq("dzh", AdaptUkrainianForFonix(u8"джерело"), "jehrehloh");
-	failed += !ExpectEq("dz", AdaptUkrainianForFonix(u8"дзвін"), "dzveen");
-	failed += !ExpectEq("sogodni", AdaptUkrainianForFonix(u8"сьогодні"), "syohohdnee");
-	failed += !ExpectEq("nyoho", AdaptUkrainianForFonix(u8"нього"), "nyohoh");
-	failed += !ExpectEq("yoho", AdaptUkrainianForFonix(u8"його"), "yohoh");
-	failed += !ExpectEq("khlib", AdaptUkrainianForFonix(u8"хліб"), "hleeb");
-	failed += !ExpectEq("sil", AdaptUkrainianForFonix(u8"сіль"), "seel");
-	failed += !ExpectEq(
-		"prepare uk",
-		PrepareDialogueText("Ukrainian", u8"[Сарказм] Привіт, мешканцю."),
-		"Prihveet, mehshkahntsyoo.");
-	failed += !ExpectEq(
-		"usenglish passthrough",
-		PrepareDialogueText("USEnglish", u8"привіт"),
-		u8"привіт");
-	failed += !ExpectEq("lang alias", ResolveFaceFxLanguage("Ukrainian"), "USEnglish");
-	failed += !ExpectEq("lang passthrough", ResolveFaceFxLanguage("USEnglish"), "USEnglish");
-
-	if (failed == 0)
-		printf("all %s\n", "passed");
-	else
-		printf("%d failed\n", failed);
-
-	return failed == 0 ? 0 : 1;
+	static const RespellLanguage language = {
+		"Ukrainian",
+		"uk",
+		"USEnglish",
+		u8"Привіт",
+		AdaptUkrainianForFonix,
+		SelfTest
+	};
+	RegisterRespellLanguage(language);
 }

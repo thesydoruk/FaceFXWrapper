@@ -100,7 +100,9 @@
     <ClInclude Include="CreationKit32.h" />
     <ClInclude Include="LipSynchAnim.h" />
     <ClInclude Include="Loader.h" />
-    <ClInclude Include="Ukrainian.h" />
+    <ClInclude Include="Respell.h" />
+    <ClInclude Include="RespellLang.h" />
+    <ClInclude Include="RespellUtil.h" />
     <ClInclude Include="..\dependencies\MemoryModule.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="..\dependencies\stb.h" />
@@ -109,7 +111,10 @@
     <ClCompile Include="CreationKit32.cpp" />
     <ClCompile Include="LipSynchAnim.cpp" />
     <ClCompile Include="Loader.cpp" />
+    <ClCompile Include="Respell.cpp" />
+    <ClCompile Include="RespellLanguages.cpp" />
     <ClCompile Include="Ukrainian.cpp" />
+    <ClCompile Include="Polish.cpp" />
     <ClCompile Include="..\dependencies\MemoryModule.c" />
     <ClCompile Include="FFXW32.cpp" />
     <ClCompile Include="..\dependencies\stb.c" />

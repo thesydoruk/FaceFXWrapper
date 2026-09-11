@@ -9,7 +9,7 @@
 #include "Loader.h"
 #include "CreationKit32.h"
 #include "LipSynchAnim.h"
-#include "Ukrainian.h"
+#include "Respell.h"
 
 std::atomic_uint32_t g_CreationKitPID;
 
@@ -17,7 +17,7 @@ bool RunLipGeneration(const char *Language, const char *FonixDataPath, const cha
 {
 	const char *dialogue = Text;
 	std::string prepared;
-	if (IsUkrainianLanguage(Language))
+	if (IsRespellLanguage(Language))
 	{
 		prepared = PrepareDialogueText(Language, Text);
 		if (prepared != (Text ? Text : ""))
@@ -193,16 +193,9 @@ void PrintUsage()
 	printf("\tFaceFXWrapper [Type] [Lang] [FonixDataPath] [WavPath] [ResampledWavPath] [LipPath] [Text]\n");
 	printf("\tFaceFXWrapper [Type] [Lang] [FonixDataPath] [ResampledWavPath] [LipPath] [Text]\n");
 	printf("\tFaceFXWrapper serve [Type]\n");
-	printf("\tFaceFXWrapper test-uk\n");
+	printf("\tFaceFXWrapper test-<id>\n");
 	printf("\n");
-	printf("Lang is Fonix \"USEnglish\", or \"Ukrainian\" (strip [tags], respell Cyrillic, then USEnglish).\n");
-	printf("Cyrillic is respelled only when Lang is Ukrainian. serve text is UTF-8.\n");
-	printf("\n");
-	printf("Examples:\n");
-	printf("\tFaceFXWrapper \"Skyrim\" \"USEnglish\" \"C:\\FonixData.cdf\" \"C:\\input.wav\" \"C:\\input_resampled.wav\" \"C:\\output.lip\" \"Blah Blah Blah\"\n");
-	printf("\tFaceFXWrapper \"Fallout4\" \"Ukrainian\" \"C:\\FonixData.cdf\" \"C:\\input_resampled.wav\" \"C:\\output.lip\" \"Привіт\"\n");
-	printf("\tFaceFXWrapper serve Fallout4\n");
-	printf("\tFaceFXWrapper test-uk\n");
+	PrintRespellUsage();
 	printf("\n");
 	printf("serve reads jobs from stdin (CK loaded once). Each job:\n");
 	printf("\tLIP\\n<Lang>\\n<FonixDataPath>\\n<WavPath>\\n<LipPath>\\n<byteLength>\\n<text bytes>\\n\n");
@@ -332,7 +325,7 @@ std::string Utf8FromWide(const wchar_t *Wide)
 	return out;
 }
 
-// Last CLI arg is dialogue; take it as UTF-16 so Ukrainian survives the ANSI argv.
+// Last CLI arg is dialogue; take it as UTF-16 so Ukrainian/Polish survive the ANSI argv.
 const char *DialogueArgUtf8(int Index, std::string &Storage)
 {
 	int wargc = 0;
@@ -358,7 +351,7 @@ int StartCommandLine()
 			return 1;
 
 		// Resampling disabled - use same path for WavPath and ResampledWavPath
-		const char *text = IsUkrainianLanguage(__argv[2]) ? DialogueArgUtf8(6, dialogueUtf8) : __argv[6];
+		const char *text = IsRespellLanguage(__argv[2]) ? DialogueArgUtf8(6, dialogueUtf8) : __argv[6];
 		if (!RunLipGeneration(__argv[2], __argv[3], __argv[4], __argv[4], __argv[5], text, false))
 		{
 			printf("LIP generation failed\n");
@@ -373,7 +366,7 @@ int StartCommandLine()
 		if (!InitializeFromType(__argv[1]))
 			return 1;
 
-		const char *text = IsUkrainianLanguage(__argv[2]) ? DialogueArgUtf8(7, dialogueUtf8) : __argv[7];
+		const char *text = IsRespellLanguage(__argv[2]) ? DialogueArgUtf8(7, dialogueUtf8) : __argv[7];
 		if (!RunLipGeneration(__argv[2], __argv[3], __argv[4], __argv[5], __argv[6], text, true))
 		{
 			printf("LIP generation failed\n");
@@ -404,10 +397,16 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		return StartServeMode(type);
 	}
 
-	if (__argc >= 2 && !_stricmp(__argv[1], "test-uk"))
+	if (__argc >= 2 && !_strnicmp(__argv[1], "test-", 5))
 	{
 		setvbuf(stdout, NULL, _IONBF, 0);
-		return RunUkrainianSelfTest();
+		return RunRespellSelfTest(__argv[1] + 5);
+	}
+
+	if (__argc >= 2 && !_stricmp(__argv[1], "test"))
+	{
+		setvbuf(stdout, NULL, _IONBF, 0);
+		return RunRespellSelfTest("all");
 	}
 
 	// Use command line processing instead

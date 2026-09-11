@@ -23,7 +23,13 @@
     <ClInclude Include="LipSynchAnim.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Ukrainian.h">
+    <ClInclude Include="Respell.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RespellLang.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RespellUtil.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\dependencies\MemoryModule.h">
@@ -46,7 +52,16 @@
     <ClCompile Include="CreationKit32.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Respell.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RespellLanguages.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Ukrainian.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Polish.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\dependencies\MemoryModule.c">
