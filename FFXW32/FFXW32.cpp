@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <shellapi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <thread>
@@ -8,16 +9,27 @@
 #include "Loader.h"
 #include "CreationKit32.h"
 #include "LipSynchAnim.h"
+#include "Ukrainian.h"
 
 std::atomic_uint32_t g_CreationKitPID;
 
 bool RunLipGeneration(const char *Language, const char *FonixDataPath, const char *WavPath, const char *ResampledWavPath, const char *LipPath, const char *Text, bool Resample)
 {
+	const char *dialogue = Text;
+	std::string prepared;
+	if (IsUkrainianLanguage(Language))
+	{
+		prepared = PrepareDialogueText(Language, Text);
+		if (prepared != (Text ? Text : ""))
+			fprintf(stderr, "[FaceFXWrapper] respelled: '%s'\n", prepared.c_str());
+		dialogue = prepared.c_str();
+	}
+
 	CreationKit::SetFaceFXDataPath(FonixDataPath);
-	CreationKit::SetFaceFXLanguage(Language);
+	CreationKit::SetFaceFXLanguage(ResolveFaceFxLanguage(Language));
 	CreationKit::SetFaceFXAutoResampling(Resample);
 
-	auto lipAnim = LipSynchAnim::Generate(WavPath, ResampledWavPath, Text);
+	auto lipAnim = LipSynchAnim::Generate(WavPath, ResampledWavPath, dialogue);
 
 	if (!lipAnim)
 		return false;
@@ -181,11 +193,16 @@ void PrintUsage()
 	printf("\tFaceFXWrapper [Type] [Lang] [FonixDataPath] [WavPath] [ResampledWavPath] [LipPath] [Text]\n");
 	printf("\tFaceFXWrapper [Type] [Lang] [FonixDataPath] [ResampledWavPath] [LipPath] [Text]\n");
 	printf("\tFaceFXWrapper serve [Type]\n");
+	printf("\tFaceFXWrapper test-uk\n");
+	printf("\n");
+	printf("Lang is Fonix \"USEnglish\", or \"Ukrainian\" (strip [tags], respell Cyrillic, then USEnglish).\n");
+	printf("Cyrillic is respelled only when Lang is Ukrainian. serve text is UTF-8.\n");
 	printf("\n");
 	printf("Examples:\n");
 	printf("\tFaceFXWrapper \"Skyrim\" \"USEnglish\" \"C:\\FonixData.cdf\" \"C:\\input.wav\" \"C:\\input_resampled.wav\" \"C:\\output.lip\" \"Blah Blah Blah\"\n");
-	printf("\tFaceFXWrapper \"Fallout4\" \"USEnglish\" \"C:\\FonixData.cdf\" \"C:\\input_resampled.wav\" \"C:\\output.lip\" \"Blah Blah Blah\"\n");
+	printf("\tFaceFXWrapper \"Fallout4\" \"Ukrainian\" \"C:\\FonixData.cdf\" \"C:\\input_resampled.wav\" \"C:\\output.lip\" \"Привіт\"\n");
 	printf("\tFaceFXWrapper serve Fallout4\n");
+	printf("\tFaceFXWrapper test-uk\n");
 	printf("\n");
 	printf("serve reads jobs from stdin (CK loaded once). Each job:\n");
 	printf("\tLIP\\n<Lang>\\n<FonixDataPath>\\n<WavPath>\\n<LipPath>\\n<byteLength>\\n<text bytes>\\n\n");
@@ -301,34 +318,70 @@ int StartServeMode(const char *Type)
 	return 0;
 }
 
+std::string Utf8FromWide(const wchar_t *Wide)
+{
+	if (!Wide || !Wide[0])
+		return {};
+
+	const int bytes = WideCharToMultiByte(CP_UTF8, 0, Wide, -1, nullptr, 0, nullptr, nullptr);
+	if (bytes <= 1)
+		return {};
+
+	std::string out(static_cast<size_t>(bytes - 1), '\0');
+	WideCharToMultiByte(CP_UTF8, 0, Wide, -1, out.data(), bytes, nullptr, nullptr);
+	return out;
+}
+
+// Last CLI arg is dialogue; take it as UTF-16 so Ukrainian survives the ANSI argv.
+const char *DialogueArgUtf8(int Index, std::string &Storage)
+{
+	int wargc = 0;
+	LPWSTR *wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+	if (wargv && Index < wargc)
+		Storage = Utf8FromWide(wargv[Index]);
+	if (wargv)
+		LocalFree(wargv);
+	if (!Storage.empty())
+		return Storage.c_str();
+	return __argv[Index];
+}
+
 int StartCommandLine()
 {
+	std::string dialogueUtf8;
+
 	switch (__argc)
 	{
 	case 7:
+	{
 		if (!InitializeFromType(__argv[1]))
 			return 1;
 
 		// Resampling disabled - use same path for WavPath and ResampledWavPath
-		if (!RunLipGeneration(__argv[2], __argv[3], __argv[4], __argv[4], __argv[5], __argv[6], false))
+		const char *text = IsUkrainianLanguage(__argv[2]) ? DialogueArgUtf8(6, dialogueUtf8) : __argv[6];
+		if (!RunLipGeneration(__argv[2], __argv[3], __argv[4], __argv[4], __argv[5], text, false))
 		{
 			printf("LIP generation failed\n");
 			return 1;
 		}
 
 		return 0;
+	}
 
 	case 8:
+	{
 		if (!InitializeFromType(__argv[1]))
 			return 1;
 
-		if (!RunLipGeneration(__argv[2], __argv[3], __argv[4], __argv[5], __argv[6], __argv[7], true))
+		const char *text = IsUkrainianLanguage(__argv[2]) ? DialogueArgUtf8(7, dialogueUtf8) : __argv[7];
+		if (!RunLipGeneration(__argv[2], __argv[3], __argv[4], __argv[5], __argv[6], text, true))
 		{
 			printf("LIP generation failed\n");
 			return 1;
 		}
 
 		return 0;
+	}
 
 	default:
 		PrintUsage();
@@ -349,6 +402,12 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	{
 		const char *type = __argc >= 3 ? __argv[2] : "Fallout4";
 		return StartServeMode(type);
+	}
+
+	if (__argc >= 2 && !_stricmp(__argv[1], "test-uk"))
+	{
+		setvbuf(stdout, NULL, _IONBF, 0);
+		return RunUkrainianSelfTest();
 	}
 
 	// Use command line processing instead

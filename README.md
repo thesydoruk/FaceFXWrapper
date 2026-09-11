@@ -7,7 +7,7 @@ A utility to generate native LIP files for TES/Fallout games without using or in
 | Argument | Possible value |
 | -------- | -------------- |
 Type | Skyrim, Fallout4
-Lang | USEnglish
+Lang | USEnglish, or Ukrainian (opt-in: strip `[tags]`, respell Cyrillic, then USEnglish Fonix)
 FonixDataPath | FonixData.cdf
 WavPath | Source audio file
 ResampledWavPath | Resampled source audio file
@@ -42,6 +42,10 @@ C:\output.lip
 <byte length of text>
 <text bytes>
 ```
+
+`Lang` may be `Ukrainian`: the wrapper strips `[tone tags]`, respells Cyrillic for stock Fonix, then runs as `USEnglish`. Other languages pass the text through unchanged. Serve text is UTF-8; CLI dialogue is read as UTF-16 when `Lang` is `Ukrainian`.
+
+`FaceFXWrapper test-uk` checks the respell table (no CK / Fonix).
 
 Replies `FXW OK` or `FXW ERR ...`. `QUIT` shuts the worker down. The wav must already be 16 kHz mono 16-bit; the serve loop does not resample.
 

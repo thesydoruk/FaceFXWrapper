@@ -50,3 +50,6 @@ x86/
 
 # Nsight
 *.nvuser
+
+# Local experiment assets (Fonix is Bethesda / Occlusion — do not commit)
+testdata/
